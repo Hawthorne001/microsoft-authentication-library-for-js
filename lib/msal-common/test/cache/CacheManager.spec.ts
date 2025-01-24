@@ -6,12 +6,11 @@
 import {
     AuthenticationScheme,
     CredentialType,
-} from "../../src/utils/Constants";
-import { AccountEntity } from "../../src/cache/entities/AccountEntity";
-import { AccessTokenEntity } from "../../src/cache/entities/AccessTokenEntity";
-import { CacheRecord } from "../../src/cache/entities/CacheRecord";
-import { AccountFilter } from "../../src/cache/utils/CacheTypes";
-import sinon from "sinon";
+} from "../../src/utils/Constants.js";
+import { AccountEntity } from "../../src/cache/entities/AccountEntity.js";
+import { AccessTokenEntity } from "../../src/cache/entities/AccessTokenEntity.js";
+import { CacheRecord } from "../../src/cache/entities/CacheRecord.js";
+import { AccountFilter } from "../../src/cache/utils/CacheTypes.js";
 import {
     TEST_CONFIG,
     TEST_TOKENS,
@@ -24,29 +23,29 @@ import {
     TEST_TOKEN_LIFETIMES,
     ID_TOKEN_ALT_CLAIMS,
     GUEST_ID_TOKEN_CLAIMS,
-} from "../test_kit/StringConstants";
+} from "../test_kit/StringConstants.js";
 import {
     ClientAuthErrorCodes,
     createClientAuthError,
-} from "../../src/error/ClientAuthError";
-import { AccountInfo } from "../../src/account/AccountInfo";
-import { MockCache } from "./MockCache";
+} from "../../src/error/ClientAuthError.js";
+import { AccountInfo } from "../../src/account/AccountInfo.js";
+import { MockCache } from "./MockCache.js";
 import { buildAccountFromIdTokenClaims, buildIdToken } from "msal-test-utils";
-import { mockCrypto } from "../client/ClientTestUtils";
-import { TestError } from "../test_kit/TestErrors";
-import { CacheManager } from "../../src/cache/CacheManager";
-import { AuthorityMetadataEntity } from "../../src/cache/entities/AuthorityMetadataEntity";
-import { AppMetadataEntity } from "../../src/cache/entities/AppMetadataEntity";
-import { RefreshTokenEntity } from "../../src/cache/entities/RefreshTokenEntity";
-import { IdTokenEntity } from "../../src/cache/entities/IdTokenEntity";
+import { mockCrypto } from "../client/ClientTestUtils.js";
+import { TestError } from "../test_kit/TestErrors.js";
+import { CacheManager } from "../../src/cache/CacheManager.js";
+import { AuthorityMetadataEntity } from "../../src/cache/entities/AuthorityMetadataEntity.js";
+import { AppMetadataEntity } from "../../src/cache/entities/AppMetadataEntity.js";
+import { RefreshTokenEntity } from "../../src/cache/entities/RefreshTokenEntity.js";
+import { IdTokenEntity } from "../../src/cache/entities/IdTokenEntity.js";
 import {
     CacheHelpers,
     CommonSilentFlowRequest,
     PerformanceEvents,
     ScopeSet,
-} from "../../src";
-import * as authorityMetadata from "../../src/authority/AuthorityMetadata";
-import { MockPerformanceClient } from "../telemetry/PerformanceClient.spec";
+} from "../../src/index.js";
+import * as authorityMetadata from "../../src/authority/AuthorityMetadata.js";
+import { MockPerformanceClient } from "../telemetry/PerformanceClient.spec.js";
 
 describe("CacheManager.ts test cases", () => {
     const mockCache = new MockCache(CACHE_MOCKS.MOCK_CLIENT_ID, mockCrypto, {
@@ -55,12 +54,12 @@ describe("CacheManager.ts test cases", () => {
             .metadata,
         knownAuthorities: [TEST_CONFIG.validAuthorityHost],
     });
-    let authorityMetadataStub: sinon.SinonStub;
-    beforeEach(() => {
-        mockCache.initializeCache();
-        authorityMetadataStub = sinon
-            .stub(CacheManager.prototype, "getAuthorityMetadataByAlias")
-            .callsFake((host) => {
+    let authorityMetadataStub: jest.SpyInstance;
+    beforeEach(async () => {
+        await mockCache.initializeCache();
+        authorityMetadataStub = jest
+            .spyOn(CacheManager.prototype, "getAuthorityMetadataByAlias")
+            .mockImplementation((host) => {
                 const authorityMetadata: AuthorityMetadataEntity = {
                     aliases: [host],
                     preferred_cache: host,
@@ -82,7 +81,7 @@ describe("CacheManager.ts test cases", () => {
 
     afterEach(async () => {
         await mockCache.clearCache();
-        sinon.restore();
+        jest.restoreAllMocks();
     });
 
     describe("saveCacheRecord tests", () => {
@@ -98,7 +97,10 @@ describe("CacheManager.ts test cases", () => {
             const accountKey = ac.generateAccountKey();
             const cacheRecord: CacheRecord = {};
             cacheRecord.account = ac;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID
+            );
             const mockCacheAccount = mockCache.cacheManager.getAccount(
                 accountKey
             ) as AccountEntity;
@@ -128,7 +130,10 @@ describe("CacheManager.ts test cases", () => {
             const atKey = CacheHelpers.generateCredentialKey(at);
             const cacheRecord: CacheRecord = {};
             cacheRecord.accessToken = at;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID
+            );
             const mockCacheAT = mockCache.cacheManager.getAccessTokenCredential(
                 atKey
             ) as AccessTokenEntity;
@@ -160,9 +165,13 @@ describe("CacheManager.ts test cases", () => {
             const atKey = CacheHelpers.generateCredentialKey(at);
             const cacheRecord: CacheRecord = {};
             cacheRecord.accessToken = at;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord, {
-                accessToken: false,
-            });
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID,
+                {
+                    accessToken: false,
+                }
+            );
             const mockCacheAT =
                 mockCache.cacheManager.getAccessTokenCredential(atKey);
             expect(mockCacheAT).toBe(null);
@@ -187,7 +196,10 @@ describe("CacheManager.ts test cases", () => {
             const atKey = CacheHelpers.generateCredentialKey(at);
             const cacheRecord: CacheRecord = {};
             cacheRecord.accessToken = at;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID
+            );
             const mockCacheAT = mockCache.cacheManager.getAccessTokenCredential(
                 atKey
             ) as AccessTokenEntity;
@@ -216,16 +228,20 @@ describe("CacheManager.ts test cases", () => {
             const idTokenKey = CacheHelpers.generateCredentialKey(idToken);
             const cacheRecord: CacheRecord = {};
             cacheRecord.idToken = idToken;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord, {
-                idToken: false,
-            });
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID,
+                {
+                    idToken: false,
+                }
+            );
             const mockCacheId =
                 mockCache.cacheManager.getIdTokenCredential(idTokenKey);
             expect(mockCacheId).toBe(null);
         });
 
         it("getIdToken matches multiple tokens, removes them and returns null", (done) => {
-            mockCache.cacheManager.clear().then(() => {
+            mockCache.cacheManager.clear().then(async () => {
                 const idToken1 = CacheHelpers.createIdTokenEntity(
                     TEST_ACCOUNT_INFO.homeAccountId,
                     TEST_ACCOUNT_INFO.environment,
@@ -243,8 +259,8 @@ describe("CacheManager.ts test cases", () => {
                 );
                 idToken2.target = "test-target";
 
-                mockCache.cacheManager.setIdTokenCredential(idToken1);
-                mockCache.cacheManager.setIdTokenCredential(idToken2);
+                await mockCache.cacheManager.setIdTokenCredential(idToken1);
+                await mockCache.cacheManager.setIdTokenCredential(idToken2);
 
                 const mockPerfClient = new MockPerformanceClient();
                 const correlationId = "test-correlation-id";
@@ -292,9 +308,13 @@ describe("CacheManager.ts test cases", () => {
                 CacheHelpers.generateCredentialKey(refreshToken);
             const cacheRecord: CacheRecord = {};
             cacheRecord.refreshToken = refreshToken;
-            await mockCache.cacheManager.saveCacheRecord(cacheRecord, {
-                refreshToken: false,
-            });
+            await mockCache.cacheManager.saveCacheRecord(
+                cacheRecord,
+                TEST_CONFIG.CORRELATION_ID,
+                {
+                    refreshToken: false,
+                }
+            );
             const mockCacheRT =
                 mockCache.cacheManager.getRefreshTokenCredential(
                     refreshTokenKey
@@ -674,7 +694,10 @@ describe("CacheManager.ts test cases", () => {
         const accountKey = ac.generateAccountKey();
         const cacheRecord: CacheRecord = {};
         cacheRecord.account = ac;
-        await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+        await mockCache.cacheManager.saveCacheRecord(
+            cacheRecord,
+            TEST_CONFIG.CORRELATION_ID
+        );
 
         const cacheAccount = mockCache.cacheManager.getAccount(
             accountKey
@@ -699,7 +722,10 @@ describe("CacheManager.ts test cases", () => {
         const credKey = CacheHelpers.generateCredentialKey(accessTokenEntity);
         const cacheRecord: CacheRecord = {};
         cacheRecord.accessToken = accessTokenEntity;
-        await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+        await mockCache.cacheManager.saveCacheRecord(
+            cacheRecord,
+            TEST_CONFIG.CORRELATION_ID
+        );
 
         const cachedAccessToken =
             mockCache.cacheManager.getAccessTokenCredential(
@@ -727,7 +753,10 @@ describe("CacheManager.ts test cases", () => {
         const credKey = CacheHelpers.generateCredentialKey(accessTokenEntity);
         const cacheRecord: CacheRecord = {};
         cacheRecord.accessToken = accessTokenEntity;
-        await mockCache.cacheManager.saveCacheRecord(cacheRecord);
+        await mockCache.cacheManager.saveCacheRecord(
+            cacheRecord,
+            TEST_CONFIG.CORRELATION_ID
+        );
 
         const cachedAccessToken =
             mockCache.cacheManager.getAccessTokenCredential(
@@ -767,7 +796,7 @@ describe("CacheManager.ts test cases", () => {
                 mockCache.cacheManager.getAccountsFilteredBy(successFilter);
             // Both cached accounts have environments that are aliases of eachother, expect both to match
             expect(Object.keys(accounts).length).toEqual(2);
-            sinon.restore();
+            jest.restoreAllMocks();
 
             const wrongFilter: AccountFilter = { environment: "Wrong Env" };
             accounts =
@@ -807,7 +836,7 @@ describe("CacheManager.ts test cases", () => {
     });
 
     describe("isCredentialKey", () => {
-        it("Returns false if key doesn't contain enough '-' deliniated sections", () => {
+        it("Returns false if key does not contain enough '-' deliniated sections", () => {
             expect(
                 mockCache.cacheManager.isCredentialKey(
                     "clientid-idToken-homeId"
@@ -815,7 +844,7 @@ describe("CacheManager.ts test cases", () => {
             ).toBe(false);
         });
 
-        it("Returns false if key doesn't contain a valid credential type", () => {
+        it("Returns false if key does not contain a valid credential type", () => {
             expect(
                 mockCache.cacheManager.isCredentialKey(
                     `homeAccountId-environment-credentialType-${CACHE_MOCKS.MOCK_CLIENT_ID}-realm-target-requestedClaimsHash-scheme`
@@ -823,7 +852,7 @@ describe("CacheManager.ts test cases", () => {
             ).toBe(false);
         });
 
-        it("Returns false if key doesn't contain clientId", () => {
+        it("Returns false if key does not contain clientId", () => {
             expect(
                 mockCache.cacheManager.isCredentialKey(
                     `homeAccountId-environment-accessToken-clientId-realm-target-requestedClaimsHash-scheme`
@@ -937,9 +966,6 @@ describe("CacheManager.ts test cases", () => {
         });
 
         describe("environment filter", () => {
-            afterEach(() => {
-                jest.restoreAllMocks();
-            });
             it("with configured static cloud discovery metadata", () => {
                 // filter by environment
                 expect(
@@ -1002,7 +1028,7 @@ describe("CacheManager.ts test cases", () => {
                     ).mockReturnValueOnce(null);
                 });
 
-                it("ID token matches when filter contains it's own environment", () => {
+                it("ID token matches when filter contains its own environment", () => {
                     // filter by environment
                     expect(
                         mockCache.cacheManager.credentialMatchesFilter(
@@ -1014,7 +1040,7 @@ describe("CacheManager.ts test cases", () => {
                     ).toBe(true);
                 });
 
-                it("Access token matches when filter contains it's own enviroment", () => {
+                it("Access token matches when filter contains its own enviroment", () => {
                     expect(
                         mockCache.cacheManager.credentialMatchesFilter(
                             testAccessToken,
@@ -1025,7 +1051,7 @@ describe("CacheManager.ts test cases", () => {
                     ).toBe(true);
                 });
 
-                it("Refresh token matches when filter contains it's own environment", () => {
+                it("Refresh token matches when filter contains its own environment", () => {
                     expect(
                         mockCache.cacheManager.credentialMatchesFilter(
                             testRefreshToken,
@@ -1593,7 +1619,7 @@ describe("CacheManager.ts test cases", () => {
             tokenType: AuthenticationScheme.POP,
         };
 
-        const removeTokenBindingKeySpy = sinon.spy(
+        const removeTokenBindingKeySpy = jest.spyOn(
             mockCrypto,
             "removeTokenBindingKey"
         );
@@ -1603,7 +1629,7 @@ describe("CacheManager.ts test cases", () => {
         );
         const atKey = CacheHelpers.generateCredentialKey(atWithAuthScheme);
         expect(mockCache.cacheManager.getAccount(atKey)).toBeNull();
-        expect(removeTokenBindingKeySpy.getCall(0).args[0]).toEqual(
+        expect(removeTokenBindingKeySpy.mock.calls[0][0]).toEqual(
             atWithAuthScheme.keyId
         );
     });
@@ -1624,7 +1650,7 @@ describe("CacheManager.ts test cases", () => {
             tokenType: AuthenticationScheme.SSH,
         };
 
-        const removeTokenBindingKeySpy = sinon.spy(
+        const removeTokenBindingKeySpy = jest.spyOn(
             mockCrypto,
             "removeTokenBindingKey"
         );
@@ -1634,10 +1660,10 @@ describe("CacheManager.ts test cases", () => {
         );
         const atKey = CacheHelpers.generateCredentialKey(atWithAuthScheme);
         expect(mockCache.cacheManager.getAccount(atKey)).toBeNull();
-        expect(removeTokenBindingKeySpy.callCount).toEqual(0);
+        expect(removeTokenBindingKeySpy).toHaveBeenCalledTimes(0);
     });
 
-    it("throws bindingKeyNotRemoved error when key isn't deleted from storage", async () => {
+    it("throws bindingKeyNotRemoved error when key is not deleted from storage", async () => {
         const atWithAuthScheme = {
             environment: "login.microsoftonline.com",
             credentialType: CredentialType.ACCESS_TOKEN_WITH_AUTH_SCHEME,
@@ -1669,7 +1695,7 @@ describe("CacheManager.ts test cases", () => {
     });
 
     it("getAccessToken matches multiple tokens, removes them and returns null", (done) => {
-        mockCache.cacheManager.clear().then(() => {
+        mockCache.cacheManager.clear().then(async () => {
             const mockedAtEntity: AccessTokenEntity =
                 CacheHelpers.createAccessTokenEntity(
                     "uid.utid",
@@ -1716,9 +1742,13 @@ describe("CacheManager.ts test cases", () => {
                 accountData
             );
 
-            mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
-            mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity2);
-            mockCache.cacheManager.setAccount(mockedAccount);
+            await mockCache.cacheManager.setAccessTokenCredential(
+                mockedAtEntity
+            );
+            await mockCache.cacheManager.setAccessTokenCredential(
+                mockedAtEntity2
+            );
+            await mockCache.cacheManager.setAccount(mockedAccount);
 
             expect(
                 mockCache.cacheManager.getTokenKeys().accessToken.length
@@ -1772,7 +1802,7 @@ describe("CacheManager.ts test cases", () => {
         });
     });
 
-    it("getAccessToken only matches a Bearer Token when Authentication Scheme is set to Bearer", () => {
+    it("getAccessToken only matches a Bearer Token when Authentication Scheme is set to Bearer", async () => {
         const mockedAtEntity: AccessTokenEntity =
             CacheHelpers.createAccessTokenEntity(
                 "uid.utid",
@@ -1836,10 +1866,14 @@ describe("CacheManager.ts test cases", () => {
             accountData
         );
 
-        mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedPopAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedSshAtEntity);
-        mockCache.cacheManager.setAccount(mockedAccount);
+        await mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedPopAtEntity
+        );
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedSshAtEntity
+        );
+        await mockCache.cacheManager.setAccount(mockedAccount);
 
         const mockedAccountInfo: AccountInfo = {
             homeAccountId: "uid.utid",
@@ -1865,7 +1899,7 @@ describe("CacheManager.ts test cases", () => {
         ).toEqual(mockedAtEntity);
     });
 
-    it("getAccessToken matches a Bearer Token when Authentication Scheme is set to bearer (lowercase from adfs)", () => {
+    it("getAccessToken matches a Bearer Token when Authentication Scheme is set to bearer (lowercase from adfs)", async () => {
         const mockedAtEntity: AccessTokenEntity =
             CacheHelpers.createAccessTokenEntity(
                 "uid.utid",
@@ -1897,9 +1931,9 @@ describe("CacheManager.ts test cases", () => {
             accountData
         );
 
-        mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
+        await mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
 
-        mockCache.cacheManager.setAccount(mockedAccount);
+        await mockCache.cacheManager.setAccount(mockedAccount);
 
         const mockedAccountInfo: AccountInfo = {
             homeAccountId: "uid.utid",
@@ -1925,7 +1959,7 @@ describe("CacheManager.ts test cases", () => {
         ).toEqual(mockedAtEntity);
     });
 
-    it("getAccessToken only matches a POP Token when Authentication Scheme is set to pop", () => {
+    it("getAccessToken only matches a POP Token when Authentication Scheme is set to pop", async () => {
         const mockedAtEntity: AccessTokenEntity =
             CacheHelpers.createAccessTokenEntity(
                 "uid.utid",
@@ -1989,10 +2023,14 @@ describe("CacheManager.ts test cases", () => {
             accountData
         );
 
-        mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedPopAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedSshAtEntity);
-        mockCache.cacheManager.setAccount(mockedAccount);
+        await mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedPopAtEntity
+        );
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedSshAtEntity
+        );
+        await mockCache.cacheManager.setAccount(mockedAccount);
 
         const mockedAccountInfo: AccountInfo = {
             homeAccountId: "uid.utid",
@@ -2019,7 +2057,7 @@ describe("CacheManager.ts test cases", () => {
         ).toEqual(mockedPopAtEntity);
     });
 
-    it("getAccessToken only matches an SSH Certificate when Authentication Scheme is set to ssh-cert", () => {
+    it("getAccessToken only matches an SSH Certificate when Authentication Scheme is set to ssh-cert", async () => {
         const mockedAtEntity: AccessTokenEntity =
             CacheHelpers.createAccessTokenEntity(
                 "uid.utid",
@@ -2085,10 +2123,14 @@ describe("CacheManager.ts test cases", () => {
             accountData
         );
 
-        mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedPopAtEntity);
-        mockCache.cacheManager.setAccessTokenCredential(mockedSshAtEntity);
-        mockCache.cacheManager.setAccount(mockedAccount);
+        await mockCache.cacheManager.setAccessTokenCredential(mockedAtEntity);
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedPopAtEntity
+        );
+        await mockCache.cacheManager.setAccessTokenCredential(
+            mockedSshAtEntity
+        );
+        await mockCache.cacheManager.setAccount(mockedAccount);
 
         const mockedAccountInfo: AccountInfo = {
             homeAccountId: "uid.utid",
@@ -2207,7 +2249,7 @@ describe("CacheManager.ts test cases", () => {
     });
 
     it("getRefreshToken with environment aliases", () => {
-        authorityMetadataStub.callsFake((host) => {
+        authorityMetadataStub.mockImplementation((host) => {
             const authorityMetadata: AuthorityMetadataEntity = {
                 aliases: ["login.microsoftonline.com", "login.windows.net"],
                 preferred_cache: host,
