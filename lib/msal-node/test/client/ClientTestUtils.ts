@@ -20,7 +20,6 @@ import {
     ProtocolMode,
     AuthorityOptions,
     AuthorityMetadataEntity,
-    ValidCredentialType,
     Logger,
     LogLevel,
     TokenKeys,
@@ -35,6 +34,7 @@ import {
 } from "@azure/msal-common";
 import {
     AUTHENTICATION_RESULT,
+    DEVICE_CODE_RESPONSE,
     ID_TOKEN_CLAIMS,
     RANDOM_TEST_GUID,
     TEST_CONFIG,
@@ -42,9 +42,9 @@ import {
     TEST_DATA_CLIENT_INFO,
     TEST_POP_VALUES,
     TEST_TOKENS,
-} from "../test_kit/StringConstants";
-import { Configuration } from "../../src/config/Configuration";
-import { TEST_CONSTANTS } from "../utils/TestConstants";
+} from "../test_kit/StringConstants.js";
+import { Configuration } from "../../src/config/Configuration.js";
+import { TEST_CONSTANTS } from "../utils/TestConstants.js";
 
 const ACCOUNT_KEYS = "ACCOUNT_KEYS";
 const TOKEN_KEYS = "TOKEN_KEYS";
@@ -65,7 +65,7 @@ export class MockStorageClass extends CacheManager {
         return this.getAccount(accountKey);
     }
 
-    setAccount(value: AccountEntity): void {
+    async setAccount(value: AccountEntity): Promise<void> {
         const key = value.generateAccountKey();
         this.store[key] = value;
 
@@ -86,10 +86,6 @@ export class MockStorageClass extends CacheManager {
         }
     }
 
-    removeOutdatedAccount(accountKey: string): void {
-        this.removeAccount(accountKey);
-    }
-
     getAccountKeys(): string[] {
         return this.store[ACCOUNT_KEYS] || [];
     }
@@ -108,7 +104,7 @@ export class MockStorageClass extends CacheManager {
     getIdTokenCredential(key: string): IdTokenEntity | null {
         return (this.store[key] as IdTokenEntity) || null;
     }
-    setIdTokenCredential(value: IdTokenEntity): void {
+    async setIdTokenCredential(value: IdTokenEntity): Promise<void> {
         const key = CacheHelpers.generateCredentialKey(value);
         this.store[key] = value;
 
@@ -123,7 +119,7 @@ export class MockStorageClass extends CacheManager {
     getAccessTokenCredential(key: string): AccessTokenEntity | null {
         return (this.store[key] as AccessTokenEntity) || null;
     }
-    setAccessTokenCredential(value: AccessTokenEntity): void {
+    async setAccessTokenCredential(value: AccessTokenEntity): Promise<void> {
         const key = CacheHelpers.generateCredentialKey(value);
         this.store[key] = value;
 
@@ -138,7 +134,7 @@ export class MockStorageClass extends CacheManager {
     getRefreshTokenCredential(key: string): RefreshTokenEntity | null {
         return (this.store[key] as RefreshTokenEntity) || null;
     }
-    setRefreshTokenCredential(value: RefreshTokenEntity): void {
+    async setRefreshTokenCredential(value: RefreshTokenEntity): Promise<void> {
         const key = CacheHelpers.generateCredentialKey(value);
         this.store[key] = value;
 
@@ -198,23 +194,6 @@ export class MockStorageClass extends CacheManager {
     }
     async clear(): Promise<void> {
         this.store = {};
-    }
-    updateCredentialCacheKey(
-        currentCacheKey: string,
-        credential: ValidCredentialType
-    ): string {
-        const updatedCacheKey = CacheHelpers.generateCredentialKey(credential);
-
-        if (currentCacheKey !== updatedCacheKey) {
-            const cacheItem = this.store[currentCacheKey];
-            if (cacheItem) {
-                this.removeItem(currentCacheKey);
-                this.store[updatedCacheKey] = cacheItem;
-                return updatedCacheKey;
-            }
-        }
-
-        return currentCacheKey;
     }
 }
 
@@ -341,6 +320,7 @@ export class ClientTestUtils {
             authOptions: {
                 clientId: TEST_CONFIG.MSAL_CLIENT_ID,
                 authority: authority,
+                redirectUri: TEST_CONFIG.REDIRECT_URI,
             },
             storageInterface: mockStorage,
             networkInterface: mockHttpClient,
@@ -430,25 +410,27 @@ export class ClientTestUtils {
 }
 
 interface checks {
-    dstsScope?: boolean | undefined;
-    graphScope?: boolean | undefined;
-    clientId?: boolean | undefined;
-    grantType?: string | undefined;
-    clientSecret?: boolean | undefined;
-    clientSku?: boolean | undefined;
-    clientVersion?: boolean | undefined;
-    clientOs?: boolean | undefined;
-    clientCpu?: boolean | undefined;
-    appName?: boolean | undefined;
-    appVersion?: boolean | undefined;
-    msLibraryCapability?: boolean | undefined;
-    claims?: boolean | undefined;
-    testConfigAssertion?: boolean | undefined;
-    testRequestAssertion?: boolean | undefined;
-    testAssertionType?: boolean | undefined;
-    responseType?: boolean | undefined;
-    username?: string | undefined;
-    password?: string | undefined;
+    dstsScope?: boolean;
+    graphScope?: boolean;
+    clientId?: boolean;
+    grantType?: string;
+    clientSecret?: boolean;
+    clientSku?: boolean;
+    clientVersion?: boolean;
+    clientOs?: boolean;
+    clientCpu?: boolean;
+    appName?: boolean;
+    appVersion?: boolean;
+    msLibraryCapability?: boolean;
+    claims?: boolean;
+    testConfigAssertion?: boolean;
+    testRequestAssertion?: boolean;
+    testAssertionType?: boolean;
+    responseType?: boolean;
+    username?: string;
+    password?: string;
+    deviceCode?: boolean;
+    queryString?: boolean;
 }
 
 export const checkMockedNetworkRequest = (
@@ -477,7 +459,7 @@ export const checkMockedNetworkRequest = (
         ).toBe(checks.clientId);
     }
 
-    if (checks.grantType !== undefined) {
+    if (checks.grantType) {
         expect(
             returnVal.includes(
                 `${AADServerParamKeys.GRANT_TYPE}=${checks.grantType}`
@@ -597,7 +579,7 @@ export const checkMockedNetworkRequest = (
         ).toBe(checks.responseType);
     }
 
-    if (checks.username !== undefined) {
+    if (checks.username) {
         expect(
             returnVal.includes(
                 `${PasswordGrantConstants.username}=${checks.username}`
@@ -605,10 +587,22 @@ export const checkMockedNetworkRequest = (
         ).toBe(true);
     }
 
-    if (checks.password !== undefined) {
+    if (checks.password) {
         expect(
             returnVal.includes(
                 `${PasswordGrantConstants.password}=${checks.password}`
+            )
+        ).toBe(true);
+    }
+
+    if (checks.deviceCode) {
+        expect(returnVal.includes(DEVICE_CODE_RESPONSE.deviceCode)).toBe(true);
+    }
+
+    if (checks.queryString) {
+        expect(
+            returnVal.includes(
+                `${TEST_CONFIG.DEFAULT_GRAPH_SCOPE}%20${Constants.OPENID_SCOPE}%20${Constants.PROFILE_SCOPE}%20${Constants.OFFLINE_ACCESS_SCOPE}`
             )
         ).toBe(true);
     }
@@ -620,7 +614,7 @@ export const getClientAssertionCallback = (
     const clientAssertionCallback: ClientAssertionCallback = async (
         _config: ClientAssertionConfig
     ): Promise<string> => {
-        return await Promise.resolve(clientAssertion);
+        return Promise.resolve(clientAssertion);
     };
 
     return clientAssertionCallback;

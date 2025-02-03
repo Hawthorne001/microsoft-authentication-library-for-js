@@ -62,7 +62,7 @@ describe("Auth Code B2C Tests (msa account)", () => {
 
         const labApiParms: LabApiQueryParams = {
             userType: UserTypes.B2C,
-            b2cProvider: B2cProviders.TWITTER,
+            b2cProvider: B2cProviders.MICROSOFT,
         };
 
         const labClient = new LabClient();
@@ -100,7 +100,7 @@ describe("Auth Code B2C Tests (msa account)", () => {
         });
 
         beforeEach(async () => {
-            context = await browser.createIncognitoBrowserContext();
+            context = await browser.createBrowserContext();
             page = await context.newPage();
             page.setDefaultTimeout(5000);
             page.on("dialog", async (dialog) => {
